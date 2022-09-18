@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>customers.html</h1>
+    <p>Report generated on 12-Jul-2022 at 09:47:51 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19043-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "2.0.1"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>3 tests ran in 4.45 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">3 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/customers/test_create_customers_smoke.py::test_create_customer_only_email_password</td>
+          <td class="col-duration">3.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_create_customers_smoke.py:12 TEST: Create new customer with email and password only.
+DEBUG    root:genericUtilities.py:7 Generating random email and password.
+DEBUG    root:genericUtilities.py:24 Randomly generated email and password: {&#x27;email&#x27;: &#x27;testuser_ckmwhpwkar@vilmate.com&#x27;, &#x27;password&#x27;: &#x27;ehXeRfqcUv&#x27;}
+INFO     root:test_create_customers_smoke.py:15 {&#x27;email&#x27;: &#x27;testuser_ckmwhpwkar@vilmate.com&#x27;, &#x27;password&#x27;: &#x27;ehXeRfqcUv&#x27;}
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:77 Signing request &lt;PreparedRequest [POST]&gt; using client &lt;Client client_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1, client_secret=****, resource_owner_key=None, resource_owner_secret=None, signature_method=HMAC-SHA1, signature_type=AUTH_HEADER, callback_uri=None, rsa_key=None, verifier=None, realm=None, encoding=utf-8, decoding=utf-8, nonce=None, timestamp=None&gt;
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:91 Including body in call to sign: False
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:171 Collected params: [(&#x27;oauth_nonce&#x27;, &#x27;162337716100482569311657608467&#x27;), (&#x27;oauth_timestamp&#x27;, &#x27;1657608467&#x27;), (&#x27;oauth_version&#x27;, &#x27;1.0&#x27;), (&#x27;oauth_signature_method&#x27;, &#x27;HMAC-SHA1&#x27;), (&#x27;oauth_consumer_key&#x27;, &#x27;ck_c0f44eb9487cbc8332097277f2925b76621743e1&#x27;)]
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:175 Normalized params: oauth_consumer_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1&amp;oauth_nonce=162337716100482569311657608467&amp;oauth_signature_method=HMAC-SHA1&amp;oauth_timestamp=1657608467&amp;oauth_version=1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:176 Normalized URI: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:181 Signing: signature base string: POST&amp;http%3A%2F%2Flocalhost%3A8888%2Fcoolsite2%2Fwp-json%2Fwc%2Fv3%2Fcustomers&amp;oauth_consumer_key%3Dck_c0f44eb9487cbc8332097277f2925b76621743e1%26oauth_nonce%3D162337716100482569311657608467%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1657608467%26oauth_version%3D1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:188 Signature: lhKCq/IkElIdSZkJpYG0nJ4+EE0=
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:358 Encoding URI, headers and body to utf-8.
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:114 Updated url: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:115 Updated headers: {b&#x27;User-Agent&#x27;: b&#x27;python-requests/2.28.0&#x27;, b&#x27;Accept-Encoding&#x27;: b&#x27;gzip, deflate&#x27;, b&#x27;Accept&#x27;: b&#x27;*/*&#x27;, b&#x27;Connection&#x27;: b&#x27;keep-alive&#x27;, b&#x27;Content-Type&#x27;: b&#x27;application/json&#x27;, b&#x27;Content-Length&#x27;: b&#x27;70&#x27;, b&#x27;Authorization&#x27;: b&#x27;OAuth oauth_nonce=&quot;162337716100482569311657608467&quot;, oauth_timestamp=&quot;1657608467&quot;, oauth_version=&quot;1.0&quot;, oauth_signature_method=&quot;HMAC-SHA1&quot;, oauth_consumer_key=&quot;ck_c0f44eb9487cbc8332097277f2925b76621743e1&quot;, oauth_signature=&quot;lhKCq%2FIkElIdSZkJpYG0nJ4%2BEE0%3D&quot;&#x27;}
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:116 Updated body: &#x27;{&quot;email&quot;: &quot;testuser_ckmwhpwkar@vilmate.com&quot;, &quot;password&quot;: &quot;ehXeRfqcUv&quot;}&#x27;
+DEBUG    urllib3.connectionpool:connectionpool.py:228 Starting new HTTP connection (1): localhost:8888
+DEBUG    urllib3.connectionpool:connectionpool.py:456 http://localhost:8888 &quot;POST /coolsite2/wp-json/wc/v3/customers HTTP/1.1&quot; 201 390
+DEBUG    root:requestsUtility.py:36 POST API response: {&#x27;id&#x27;: 19, &#x27;date_created&#x27;: &#x27;2022-07-12T06:47:48&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-12T06:47:48&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-12T06:47:50&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-12T06:47:50&#x27;, &#x27;email&#x27;: &#x27;testuser_ckmwhpwkar@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_ckmwhpwkar&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/bc5fccff3fca640c52ee157981ef0d10?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/19&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}
+DEBUG    root:dbUtility.py:22 Executing: SELECT * FROM coolsite2.wp_users WHERE user_email = &#x27;testuser_ckmwhpwkar@vilmate.com&#x27;;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/customers/test_create_customers_smoke.py::test_created_customer_fail_for_existing_email</td>
+          <td class="col-duration">0.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>DEBUG    root:dbUtility.py:22 Executing: SELECT * FROM coolsite2.wp_users ORDER BY id DESC LIMIT 1000;
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:77 Signing request &lt;PreparedRequest [POST]&gt; using client &lt;Client client_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1, client_secret=****, resource_owner_key=None, resource_owner_secret=None, signature_method=HMAC-SHA1, signature_type=AUTH_HEADER, callback_uri=None, rsa_key=None, verifier=None, realm=None, encoding=utf-8, decoding=utf-8, nonce=None, timestamp=None&gt;
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:91 Including body in call to sign: False
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:171 Collected params: [(&#x27;oauth_nonce&#x27;, &#x27;41638829659418100361657608470&#x27;), (&#x27;oauth_timestamp&#x27;, &#x27;1657608470&#x27;), (&#x27;oauth_version&#x27;, &#x27;1.0&#x27;), (&#x27;oauth_signature_method&#x27;, &#x27;HMAC-SHA1&#x27;), (&#x27;oauth_consumer_key&#x27;, &#x27;ck_c0f44eb9487cbc8332097277f2925b76621743e1&#x27;)]
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:175 Normalized params: oauth_consumer_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1&amp;oauth_nonce=41638829659418100361657608470&amp;oauth_signature_method=HMAC-SHA1&amp;oauth_timestamp=1657608470&amp;oauth_version=1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:176 Normalized URI: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:181 Signing: signature base string: POST&amp;http%3A%2F%2Flocalhost%3A8888%2Fcoolsite2%2Fwp-json%2Fwc%2Fv3%2Fcustomers&amp;oauth_consumer_key%3Dck_c0f44eb9487cbc8332097277f2925b76621743e1%26oauth_nonce%3D41638829659418100361657608470%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1657608470%26oauth_version%3D1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:188 Signature: 6SNpy+BRBWo6IouqfV6UQxWVlqs=
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:358 Encoding URI, headers and body to utf-8.
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:114 Updated url: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:115 Updated headers: {b&#x27;User-Agent&#x27;: b&#x27;python-requests/2.28.0&#x27;, b&#x27;Accept-Encoding&#x27;: b&#x27;gzip, deflate&#x27;, b&#x27;Accept&#x27;: b&#x27;*/*&#x27;, b&#x27;Connection&#x27;: b&#x27;keep-alive&#x27;, b&#x27;Content-Type&#x27;: b&#x27;application/json&#x27;, b&#x27;Content-Length&#x27;: b&#x27;69&#x27;, b&#x27;Authorization&#x27;: b&#x27;OAuth oauth_nonce=&quot;41638829659418100361657608470&quot;, oauth_timestamp=&quot;1657608470&quot;, oauth_version=&quot;1.0&quot;, oauth_signature_method=&quot;HMAC-SHA1&quot;, oauth_consumer_key=&quot;ck_c0f44eb9487cbc8332097277f2925b76621743e1&quot;, oauth_signature=&quot;6SNpy%2BBRBWo6IouqfV6UQxWVlqs%3D&quot;&#x27;}
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:116 Updated body: &#x27;{&quot;email&quot;: &quot;testuser_shabufisfa@vilmate.com&quot;, &quot;password&quot;: &quot;Password1&quot;}&#x27;
+DEBUG    urllib3.connectionpool:connectionpool.py:228 Starting new HTTP connection (1): localhost:8888
+DEBUG    urllib3.connectionpool:connectionpool.py:456 http://localhost:8888 &quot;POST /coolsite2/wp-json/wc/v3/customers HTTP/1.1&quot; 400 167
+DEBUG    root:requestsUtility.py:36 POST API response: {&#x27;code&#x27;: &#x27;registration-error-email-exists&#x27;, &#x27;message&#x27;: &#x27;An account is already registered with your email address. &lt;a href=&quot;#&quot; class=&quot;showlogin&quot;&gt;Please log in.&lt;/a&gt;&#x27;, &#x27;data&#x27;: {&#x27;status&#x27;: 400}}<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/customers/test_get_customers_smoke.py::test_get_all_customers</td>
+          <td class="col-duration">0.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:77 Signing request &lt;PreparedRequest [GET]&gt; using client &lt;Client client_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1, client_secret=****, resource_owner_key=None, resource_owner_secret=None, signature_method=HMAC-SHA1, signature_type=AUTH_HEADER, callback_uri=None, rsa_key=None, verifier=None, realm=None, encoding=utf-8, decoding=utf-8, nonce=None, timestamp=None&gt;
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:91 Including body in call to sign: False
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:171 Collected params: [(&#x27;oauth_nonce&#x27;, &#x27;166869071754975947601657608470&#x27;), (&#x27;oauth_timestamp&#x27;, &#x27;1657608470&#x27;), (&#x27;oauth_version&#x27;, &#x27;1.0&#x27;), (&#x27;oauth_signature_method&#x27;, &#x27;HMAC-SHA1&#x27;), (&#x27;oauth_consumer_key&#x27;, &#x27;ck_c0f44eb9487cbc8332097277f2925b76621743e1&#x27;)]
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:175 Normalized params: oauth_consumer_key=ck_c0f44eb9487cbc8332097277f2925b76621743e1&amp;oauth_nonce=166869071754975947601657608470&amp;oauth_signature_method=HMAC-SHA1&amp;oauth_timestamp=1657608470&amp;oauth_version=1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:176 Normalized URI: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:181 Signing: signature base string: GET&amp;http%3A%2F%2Flocalhost%3A8888%2Fcoolsite2%2Fwp-json%2Fwc%2Fv3%2Fcustomers&amp;oauth_consumer_key%3Dck_c0f44eb9487cbc8332097277f2925b76621743e1%26oauth_nonce%3D166869071754975947601657608470%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1657608470%26oauth_version%3D1.0
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:188 Signature: 3BiLNgKcBF27rIFPwsSfnBZkG8s=
+DEBUG    oauthlib.oauth1.rfc5849:__init__.py:358 Encoding URI, headers and body to utf-8.
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:114 Updated url: http://localhost:8888/coolsite2/wp-json/wc/v3/customers
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:115 Updated headers: {b&#x27;User-Agent&#x27;: b&#x27;python-requests/2.28.0&#x27;, b&#x27;Accept-Encoding&#x27;: b&#x27;gzip, deflate&#x27;, b&#x27;Accept&#x27;: b&#x27;*/*&#x27;, b&#x27;Connection&#x27;: b&#x27;keep-alive&#x27;, b&#x27;Content-Type&#x27;: b&#x27;application/json&#x27;, b&#x27;Content-Length&#x27;: b&#x27;4&#x27;, b&#x27;Authorization&#x27;: b&#x27;OAuth oauth_nonce=&quot;166869071754975947601657608470&quot;, oauth_timestamp=&quot;1657608470&quot;, oauth_version=&quot;1.0&quot;, oauth_signature_method=&quot;HMAC-SHA1&quot;, oauth_consumer_key=&quot;ck_c0f44eb9487cbc8332097277f2925b76621743e1&quot;, oauth_signature=&quot;3BiLNgKcBF27rIFPwsSfnBZkG8s%3D&quot;&#x27;}
+DEBUG    requests_oauthlib.oauth1_auth:oauth1_auth.py:116 Updated body: &#x27;null&#x27;
+DEBUG    urllib3.connectionpool:connectionpool.py:228 Starting new HTTP connection (1): localhost:8888
+DEBUG    urllib3.connectionpool:connectionpool.py:456 http://localhost:8888 &quot;GET /coolsite2/wp-json/wc/v3/customers HTTP/1.1&quot; 200 1152
+DEBUG    root:requestsUtility.py:51 GET API response: [{&#x27;id&#x27;: 2, &#x27;date_created&#x27;: &#x27;2022-07-04T08:08:09&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-04T08:08:09&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-04T08:08:11&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-04T08:08:11&#x27;, &#x27;email&#x27;: &#x27;john.doe@example.com&#x27;, &#x27;first_name&#x27;: &#x27;John&#x27;, &#x27;last_name&#x27;: &#x27;Doe&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;john.doe&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;John&#x27;, &#x27;last_name&#x27;: &#x27;Doe&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;969 Market&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;San Francisco&#x27;, &#x27;postcode&#x27;: &#x27;94103&#x27;, &#x27;country&#x27;: &#x27;US&#x27;, &#x27;state&#x27;: &#x27;CA&#x27;, &#x27;email&#x27;: &#x27;john.doe@example.com&#x27;, &#x27;phone&#x27;: &#x27;(555) 555-5555&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;John&#x27;, &#x27;last_name&#x27;: &#x27;Doe&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;969 Market&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;San Francisco&#x27;, &#x27;postcode&#x27;: &#x27;94103&#x27;, &#x27;country&#x27;: &#x27;US&#x27;, &#x27;state&#x27;: &#x27;CA&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/8eb1b522f60d11fa897de1dc6351b7e8?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/2&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 3, &#x27;date_created&#x27;: &#x27;2022-07-09T15:43:18&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-09T15:43:18&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-09T15:43:21&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-09T15:43:21&#x27;, &#x27;email&#x27;: &#x27;john.doe2@example.com&#x27;, &#x27;first_name&#x27;: &#x27;John2&#x27;, &#x27;last_name&#x27;: &#x27;Doe2&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;john.doe2&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;John&#x27;, &#x27;last_name&#x27;: &#x27;Doe&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;969 Market&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;San Francisco&#x27;, &#x27;postcode&#x27;: &#x27;94103&#x27;, &#x27;country&#x27;: &#x27;US&#x27;, &#x27;state&#x27;: &#x27;CA&#x27;, &#x27;email&#x27;: &#x27;john.doe2@example.com&#x27;, &#x27;phone&#x27;: &#x27;(555) 555-444&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;John2&#x27;, &#x27;last_name&#x27;: &#x27;Doe2&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;968 Market&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;San Francisco&#x27;, &#x27;postcode&#x27;: &#x27;94102&#x27;, &#x27;country&#x27;: &#x27;US&#x27;, &#x27;state&#x27;: &#x27;CA&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://0.gravatar.com/avatar/6ad0b094bac53a85bb282ccdb3958279?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/3&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 18, &#x27;date_created&#x27;: &#x27;2022-07-12T06:46:54&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-12T06:46:54&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-12T06:46:57&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-12T06:46:57&#x27;, &#x27;email&#x27;: &#x27;testuser_axskvuvohl@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_axskvuvohl&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://0.gravatar.com/avatar/68de163edd2753162439702db5cda37f?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/18&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 8, &#x27;date_created&#x27;: &#x27;2022-07-09T19:42:57&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-09T19:42:57&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-09T19:42:59&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-09T19:42:59&#x27;, &#x27;email&#x27;: &#x27;testuser_bgzavxufmw@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_bgzavxufmw&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/ec379d7029e621eefdb6a9924cefd3ac?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/8&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 19, &#x27;date_created&#x27;: &#x27;2022-07-12T06:47:48&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-12T06:47:48&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-12T06:47:50&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-12T06:47:50&#x27;, &#x27;email&#x27;: &#x27;testuser_ckmwhpwkar@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_ckmwhpwkar&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/bc5fccff3fca640c52ee157981ef0d10?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/19&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 13, &#x27;date_created&#x27;: &#x27;2022-07-11T19:44:31&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-11T19:44:31&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-11T19:44:33&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-11T19:44:33&#x27;, &#x27;email&#x27;: &#x27;testuser_fptwfqplmk@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_fptwfqplmk&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://0.gravatar.com/avatar/c7c44743f9008b09f361def1c308abf1?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/13&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 11, &#x27;date_created&#x27;: &#x27;2022-07-11T18:36:00&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-11T18:36:00&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-11T18:36:03&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-11T18:36:03&#x27;, &#x27;email&#x27;: &#x27;testuser_ivhbzxdglv@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_ivhbzxdglv&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://1.gravatar.com/avatar/13c5feedf1bda322f0f3437fc6699851?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/11&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 10, &#x27;date_created&#x27;: &#x27;2022-07-11T18:14:23&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-11T18:14:23&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-11T18:14:26&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-11T18:14:26&#x27;, &#x27;email&#x27;: &#x27;testuser_lxkzysreii@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_lxkzysreii&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/8b2d720c1cbde0a592d2fa927dc26c81?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/10&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 14, &#x27;date_created&#x27;: &#x27;2022-07-11T19:45:31&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-11T19:45:31&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-11T19:45:33&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-11T19:45:33&#x27;, &#x27;email&#x27;: &#x27;testuser_nngpkifbae@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_nngpkifbae&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://0.gravatar.com/avatar/ca93788bdcd4d97f0e16c938837dfd66?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/14&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}, {&#x27;id&#x27;: 16, &#x27;date_created&#x27;: &#x27;2022-07-11T20:06:49&#x27;, &#x27;date_created_gmt&#x27;: &#x27;2022-07-11T20:06:49&#x27;, &#x27;date_modified&#x27;: &#x27;2022-07-11T20:06:51&#x27;, &#x27;date_modified_gmt&#x27;: &#x27;2022-07-11T20:06:51&#x27;, &#x27;email&#x27;: &#x27;testuser_norjfxxded@vilmate.com&#x27;, &#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;role&#x27;: &#x27;customer&#x27;, &#x27;username&#x27;: &#x27;testuser_norjfxxded&#x27;, &#x27;billing&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;email&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;shipping&#x27;: {&#x27;first_name&#x27;: &#x27;&#x27;, &#x27;last_name&#x27;: &#x27;&#x27;, &#x27;company&#x27;: &#x27;&#x27;, &#x27;address_1&#x27;: &#x27;&#x27;, &#x27;address_2&#x27;: &#x27;&#x27;, &#x27;city&#x27;: &#x27;&#x27;, &#x27;postcode&#x27;: &#x27;&#x27;, &#x27;country&#x27;: &#x27;&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;phone&#x27;: &#x27;&#x27;}, &#x27;is_paying_customer&#x27;: False, &#x27;avatar_url&#x27;: &#x27;http://2.gravatar.com/avatar/5c819d473514d56960463cda0e03bfd7?s=96&amp;d=mm&amp;r=g&#x27;, &#x27;meta_data&#x27;: [], &#x27;_links&#x27;: {&#x27;self&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers/16&#x27;}], &#x27;collection&#x27;: [{&#x27;href&#x27;: &#x27;http://localhost:8888/coolsite2/wp-json/wc/v3/customers&#x27;}]}}]<br/></div></td></tr></tbody></table></body></html>
